@@ -1,0 +1,92 @@
+#!/usr/bin/perl
+#
+# emc2csv (c) 2014 Mario Goppold; mgoppold at web dot de
+# emc is for ergo_memo_card
+#
+use strict;
+use warnings;
+use POSIX qw(strftime);
+use POSIX qw(setlocale LC_NUMERIC);
+use Time::Local qw(timelocal timegm);
+use File::Basename;
+use Getopt::Std;
+
+setlocale LC_NUMERIC, "de_DE\@utf-8";
+
+sub write_csv($$);
+
+my $typedef = 'iH8H2H6A64iiffffffifffffffff';
+my $sizeof  = 152;                             # sould be   length pack($typedef,()) but is'nt
+my $buffer;
+my $difference_to_utc = ( timegm(localtime) - timelocal(localtime) );
+my %opts;
+
+getopts( 'p:x:h', \%opts );
+if ( ( scalar keys %opts ) == 0 || length $opts{h} ) {
+   print "emc2csv -p PATH [-x [NUM|ALL]]\n";
+   exit 0;
+}
+
+my $daumpath = $opts{p};
+
+die "Entweder ".$daumpath." ist kein Verzeichnis oder DAUM-Inhaltesverzeichnis ".$daumpath."/dictionary.2 existiert nicht.\n" if ( ( !-d $daumpath ) or ( !-f $daumpath."/dictionary.2" ) );
+
+open( DAUMDICT, $daumpath."/dictionary.2" ) or die "Kann Inhaltsverzeichnis dictionary.2 in ".$daumpath." nicht lesen: ".$!;
+
+my $lfdnr = 0;
+while ( read( DAUMDICT, $buffer, $sizeof ) == $sizeof ) {
+   $lfdnr++;
+   my ( $file, $d0, $typ, $d1, $text, $starttime, $endetime, $watt, $d2, $pulse, $rpm, $speed, $d3, $duration, $dist, $maxspeed, $d4, $maxrpm, $d5, $d6, $kjoule, $d7 ) = unpack( $typedef, $buffer );
+   my $fstarttime = strftime "%d.%m.%Y %H:%M", localtime( $starttime - $difference_to_utc );   # in UTC
+   my $fendetime  = strftime "%H:%M",          localtime( $endetime - $difference_to_utc );
+   my $infilename = sprintf( "%016x", $file );
+   my $outfilename = sprintf( "%04d  %s %4dmin %6.1fkm  %s", $lfdnr, strftime( "%d_%m_%Y %H_%M_%S", localtime( $starttime - $difference_to_utc ) ), $duration / 60, $dist / 1000., $text );
+   $outfilename =~ tr /\/./_/;
+   $outfilename .= ".csv";
+
+   if ( ( ( ( not defined $opts{x} ) or ( ( defined $opts{x} ) and ( $opts{x} == "ALL" ) ) ) and ( $file % 10 eq 0 ) ) or ( ( defined $opts{x} ) and ( $opts{x} == $lfdnr ) ) ) {
+      printf "\n%3s %-16s %16s %-50s %6s %5s %5s %5s %5s %5s %5s %5s %5s %6s %6s %5s %5s %3s %5s %5s %6s %5s\n",
+        "Nr", "File", "start", "text", "kCal", "dfv", "watt", "pulse", "rpm", "speed", "time", "dist", "mspeed", "mrpm", "kJoule", "d5", "d7", "typ", "d2", "d3", "d4", "d6";
+   }
+   if ( $duration gt 0 ) {
+      my $realKCal = ( $watt * $duration / 1000 ) * 4.9271 / 4.1868;
+      my $dfv = $watt / ( $pulse != 0 ? $pulse : 10000 );
+      printf "%3d %016x %16s %-50s %6.1f %5.2f %5.1f %5.1f %5.1f %5.1f %02d:%02d %6.1f %5.1f %6.1f %6.1f %5.1f %5.1f %3s %5.1f %5.1f %6.1f %5.1f\n",
+        $lfdnr, $file, $fstarttime, $text, $realKCal, $dfv, $watt, $pulse, $rpm, $speed, ( $duration / ( 60 * 60 ) ) % 24, ( $duration / 60 ) % 60, $dist / 1000., $maxspeed, $maxrpm, $kjoule, $d5, $d7, $typ, $d2, $d3, $d4, $d6 if ( not defined $opts{x} or ( ( $opts{x} == $lfdnr ) or ( $opts{x} eq "ALL" ) ) );
+      &write_csv( $daumpath."/".$infilename, $outfilename ) if ( defined $opts{x} and ( ( $opts{x} == $lfdnr ) or ( $opts{x} eq "ALL" ) ) );
+   }
+}
+close(DAUMDICT);
+
+print "\n";
+0;
+
+sub write_csv($$) {
+   my ( $infile, $outfile ) = @_;
+   my $typedef = 'lffssssscH2sssssssH2cf';
+   my $sizeof = length pack( $typedef, () );   # 44
+   my $buffer;
+
+   open( DAUMRESULT, "$infile" )      or die "Kann ".$infile." nicht lesen: ".$!;
+   open( DAUMCSV,    ">"."$outfile" ) or die "Kann ".$outfile." nicht schreiben: ".$!;
+   printf DAUMCSV "Elapsed Time (s);Distance (km);Phys. kJoule;Slope (%%);NM;RPM;Speed (km/h);Watt;Gear;Device Active;Pulse;Pulse Type;Training Type;Training Value;Pulse Time 1;2;3;4;5;6\n";
+   while ( read( DAUMRESULT, $buffer, $sizeof ) == $sizeof ) {
+      my (
+         $sec, $dist, $kjoule, $slop, $nm, $rpm, $speed, $watt,
+         $dummy1, $dummy2,
+         $pulse,  $pulstime1, $pulstime2, $pulstime3, $pulstime4, $pulstime5, $pulstime6,
+         $dummy3, $dummy4,
+         $trainings_value
+      ) = unpack( $typedef, $buffer );
+      printf DAUMCSV "%d;%.3f;%.1f;%.1f;%.1f;%.1f;%.1f;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d;%d;%d;%d\n",
+        $sec, $dist / 1000., $kjoule, $slop / 10., $nm / 10., $rpm / 10., $speed / 10., $watt,
+        $dummy1, $dummy2,
+        $pulse,
+        $dummy4, $dummy3,
+        $trainings_value,
+        $pulstime1, $pulstime2, $pulstime3, $pulstime4, $pulstime5, $pulstime6;
+   }
+   close(DAUMCSV);
+   close(DAUMRESULT);
+}
+
