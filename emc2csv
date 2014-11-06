@@ -11,7 +11,7 @@ use Time::Local qw(timelocal timegm);
 use File::Basename;
 use Getopt::Std;
 
-setlocale LC_NUMERIC, "de_DE\@utf-8";
+setlocale LC_NUMERIC, "de_DE.utf-8";
 
 sub write_csv($$);
 
