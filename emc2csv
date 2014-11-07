@@ -5,6 +5,7 @@
 #
 use strict;
 use warnings;
+use locale;
 use POSIX qw(strftime);
 use POSIX qw(setlocale LC_NUMERIC);
 use Time::Local qw(timelocal timegm);
