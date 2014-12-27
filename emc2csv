@@ -11,6 +11,7 @@ use POSIX qw(setlocale LC_NUMERIC);
 use Time::Local qw(timelocal timegm);
 use File::Basename;
 use Getopt::Std;
+use Encode qw(encode);
 
 setlocale LC_NUMERIC, "de_DE.utf-8";
 
@@ -44,6 +45,8 @@ while ( read( DAUMDICT, $buffer, $sizeof ) == $sizeof ) {
    my $outfilename = sprintf( "%04d  %s %4dmin %6.1fkm  %s", $lfdnr, strftime( "%d_%m_%Y %H_%M_%S", localtime( $starttime - $difference_to_utc ) ), $duration / 60, $dist / 1000., $text );
    $outfilename =~ tr /\/./_/;
    $outfilename .= ".csv";
+   $outfilename = encode("utf-8", $outfilename);
+   $text        = encode("utf-8", $text);
 
    if ( ( ( ( not defined $opts{x} ) or ( ( defined $opts{x} ) and ( $opts{x} == "ALL" ) ) ) and ( $file % 10 eq 0 ) ) or ( ( defined $opts{x} ) and ( $opts{x} == $lfdnr ) ) ) {
       printf "\n%3s %-16s %16s %-50s %6s %5s %5s %5s %5s %5s %5s %5s %5s %6s %6s %5s %5s %3s %5s %5s %6s %5s\n",
