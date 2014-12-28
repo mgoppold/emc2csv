@@ -8,10 +8,11 @@ use warnings;
 use locale;
 use POSIX qw(strftime);
 use POSIX qw(setlocale LC_NUMERIC);
+use Encode qw(encode);
 use Time::Local qw(timelocal timegm);
 use File::Basename;
 use Getopt::Std;
-use Encode qw(encode);
+use Scalar::Util qw(looks_like_number);
 
 setlocale LC_NUMERIC, "de_DE.utf-8";
 
@@ -48,7 +49,7 @@ while ( read( DAUMDICT, $buffer, $sizeof ) == $sizeof ) {
    $outfilename = encode("utf-8", $outfilename);
    $text        = encode("utf-8", $text);
 
-   if ( ( ( ( not defined $opts{x} ) or ( ( defined $opts{x} ) and ( $opts{x} == "ALL" ) ) ) and ( $file % 10 eq 0 ) ) or ( ( defined $opts{x} ) and ( $opts{x} == $lfdnr ) ) ) {
+   if ( ( ( ( not defined $opts{x} ) or ( ( defined $opts{x} ) and ( $opts{x} eq "ALL" ) ) ) and ( $file % 10 == 0 ) ) or ( ( defined $opts{x} ) and ( looks_like_number($opts{x}) && ( $opts{x} == $lfdnr ) ) ) ) {
       printf "\n%3s %-16s %16s %-50s %6s %5s %5s %5s %5s %5s %5s %5s %5s %6s %6s %5s %5s %3s %5s %5s %6s %5s\n",
         "Nr", "File", "start", "text", "kCal", "dfv", "watt", "pulse", "rpm", "speed", "time", "dist", "mspeed", "mrpm", "kJoule", "d5", "d7", "typ", "d2", "d3", "d4", "d6";
    }
@@ -56,8 +57,8 @@ while ( read( DAUMDICT, $buffer, $sizeof ) == $sizeof ) {
       my $realKCal = ( $watt * $duration / 1000 ) * 4.9271 / 4.1868;
       my $dfv = $watt / ( $pulse != 0 ? $pulse : 10000 );
       printf "%3d %016x %16s %-50s %6.1f %5.2f %5.1f %5.1f %5.1f %5.1f %02d:%02d %6.1f %5.1f %6.1f %6.1f %5.1f %5.1f %3s %5.1f %5.1f %6.1f %5.1f\n",
-        $lfdnr, $file, $fstarttime, $text, $realKCal, $dfv, $watt, $pulse, $rpm, $speed, ( $duration / ( 60 * 60 ) ) % 24, ( $duration / 60 ) % 60, $dist / 1000., $maxspeed, $maxrpm, $kjoule, $d5, $d7, $typ, $d2, $d3, $d4, $d6 if ( not defined $opts{x} or ( ( $opts{x} == $lfdnr ) or ( $opts{x} eq "ALL" ) ) );
-      &write_csv( $daumpath."/".$infilename, $outfilename ) if ( defined $opts{x} and ( ( $opts{x} == $lfdnr ) or ( $opts{x} eq "ALL" ) ) );
+        $lfdnr, $file, $fstarttime, $text, $realKCal, $dfv, $watt, $pulse, $rpm, $speed, ( $duration / ( 60 * 60 ) ) % 24, ( $duration / 60 ) % 60, $dist / 1000., $maxspeed, $maxrpm, $kjoule, $d5, $d7, $typ, $d2, $d3, $d4, $d6 if ( not defined $opts{x} or ( ( looks_like_number($opts{x}) && ( $opts{x} == $lfdnr ) ) or ( $opts{x} eq "ALL" ) ) );
+      &write_csv( $daumpath."/".$infilename, $outfilename ) if ( defined $opts{x} and ( ( looks_like_number($opts{x}) && ( $opts{x} == $lfdnr ) ) or ( $opts{x} eq "ALL" ) ) );
    }
 }
 close(DAUMDICT);
